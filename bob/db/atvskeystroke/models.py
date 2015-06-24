@@ -31,7 +31,7 @@ protocolPurpose_file_association = Table('protocolPurpose_file_association', Bas
   Column('protocolPurpose_id', Integer, ForeignKey('protocolPurpose.id')),
   Column('file_id',  Integer, ForeignKey('file.id')))
 
-db_file_extension = '.bmp'
+db_file_extension = '.txt'
 
 class Client(Base):
   """Database clients, marked by an integer identifier and the group they belong to"""
