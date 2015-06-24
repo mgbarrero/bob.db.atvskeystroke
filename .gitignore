@@ -1,0 +1,14 @@
+*~
+*.swp
+*.pyc
+.DS_Store
+.installed.cfg
+bob.db.atvskeystroke.egg-info/
+parts
+develop-eggs
+bin
+eggs
+.mr.developer.cfg
+src
+sphinx
+db.sql3

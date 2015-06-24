@@ -31,26 +31,27 @@ protocolPurpose_file_association = Table('protocolPurpose_file_association', Bas
   Column('protocolPurpose_id', Integer, ForeignKey('protocolPurpose.id')),
   Column('file_id',  Integer, ForeignKey('file.id')))
 
+db_file_extension = '.bmp'
+
 class Client(Base):
   """Database clients, marked by an integer identifier and the group they belong to"""
 
   __tablename__ = 'client'
 
   # Key identifier for the client
-  id = Column(Integer, primary_key=True)
-  # Group to which the client belongs to
-  # There is no separate training, development and evaluation group in XM2VTS.
-  # They are split into client, impostorDev and impostorEval (resp. labeled
-  # "impostor evaluation" and "impostor test" in the original paper describing the database)
-  group_choices = ('clientEval')
-  sgroup = Column(Enum(*group_choices)) # do NOT use group (SQL keyword)
+  id = Column(String(100), primary_key=True)
+  subid = Column(Integer)
+  type_choices = ('Genuine', 'Impostor')
+  stype = Column(Enum(*type_choices)) # do NOT use type
 
-  def __init__(self, id, group):
+  def __init__(self, id, stype, subid):
     self.id = id
-    self.sgroup = group
+    self.stype = stype
+    self.subid = subid
 
   def __repr__(self):
-    return "Client(%d, '%s')" % (self.id, self.sgroup)
+    return "Client(`%s`, `%s`)" % (self.id, self.stype)
+
 
 class File(Base, bob.db.verification.utils.File):
   """Generic file container"""
@@ -60,7 +61,7 @@ class File(Base, bob.db.verification.utils.File):
   # Key identifier for the file
   id = Column(Integer, primary_key=True)
   # Key identifier of the client associated with this file
-  client_id = Column(Integer, ForeignKey('client.id')) # for SQL
+  client_id = Column(String(100), ForeignKey('client.id')) # for SQL
   # Unique path to this file inside the database
   path = Column(String(100), unique=True)
   # Session identifier
@@ -95,6 +96,7 @@ class Protocol(Base):
   def __repr__(self):
     return "Protocol('%s')" % (self.name,)
 
+
 class ProtocolPurpose(Base):
   """ATVS Keystroke protocol purposes"""
 
@@ -105,7 +107,7 @@ class ProtocolPurpose(Base):
   # Id of the protocol associated with this protocol purpose object
   protocol_id = Column(Integer, ForeignKey('protocol.id')) # for SQL
   # Group associated with this protocol purpose object
-  group_choices = ('eval')
+  group_choices = ('eval',)
   sgroup = Column(Enum(*group_choices))
   # Purpose associated with this protocol purpose object
   purpose_choices = ('enrol', 'probe')
