@@ -17,50 +17,60 @@
 """
 
 import os, sys
-import unittest
 import bob.db.atvskeystroke
 
-class ATVSKeystrokeDatabaseTest(unittest.TestCase):
-  """Performs various tests on the Biosecurid database."""
+def db_available(test):
+  """Decorator for detecting if the database file is available"""
+  from bob.io.base.test_utils import datafile
+  from nose.plugins.skip import SkipTest
+  import functools
 
-  def test01_clients(self):
-    db = bob.db.atvskeystroke.Database()
-    self.assertEqual(len(db.groups()), 1)
-    self.assertEqual(len(db.clients()), 63)
-    self.assertEqual(len(db.clients(groups='eval')), 63)
-    #self.assertEqual(len(db.clients(groups='impostorEval')), 63)
-    self.assertEqual(len(db.models()), 63)
-    self.assertEqual(len(db.models(groups='eval')), 63)
+  @functools.wraps(test)
+  def wrapper(*args, **kwargs):
+    dbfile = datafile("db.sql3", __name__, None)
+    if os.path.exists(dbfile):
+      return test(*args, **kwargs)
+    else:
+      raise SkipTest("The database file '%s' is not available; did you forget to run 'bob_dbmanage.py %s create' ?" % (dbfile, 'banca'))
 
-
-  def test02_objects(self):
-    db = bob.db.atvskeystroke.Database()
-    self.assertEqual(len(db.objects()), 1512)
-    # A
-    self.assertEqual(len(db.objects(protocol='A')), 1512)
-    
-    self.assertEqual(len(db.objects(protocol='A', groups='eval')), 1512)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='enrol')), 378)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe')), 1134)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe', classes='client')), 378)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe', classes='impostor')), 756)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1])), 18)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1], classes='client')), 6)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1], classes='impostor')), 12)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1,2])), 36)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1,2], classes='client')), 12)
-    self.assertEqual(len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1,2], classes='impostor')), 24)
+  return wrapper
 
 
+@db_available
+def test_clients():
+  db = bob.db.atvskeystroke.Database()
+  assert len(db.groups()) == 1
+  assert len(db.clients()) == 126
+  assert len(db.clients(groups='eval')) == 63
+  assert len(db.clients(groups='Genuine')) == 63
+  assert len(db.clients(groups='Impostor')) == 63
+  assert len(db.models()) == 63
+  assert len(db.models(groups='eval')) == 63
+  assert len(db.models(groups='Genuine')) == 63
 
+@db_available
+def test_objects():
+  db = bob.db.atvskeystroke.Database()
+  assert len(db.objects()) == 1512
+  # A
+  assert len(db.objects(protocol='A')) == 1512
+  assert len(db.objects(protocol='A', groups='eval')) == 1512
+  assert len(db.objects(protocol='A', groups='eval', purposes='enrol')) == 378
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe')) == 1134
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe', classes='client')) == 378
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe', classes='impostor')) == 756
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1])) == 18
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1], classes='client')) == 6
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1], classes='impostor')) == 12
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1,2])) == 36
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1,2], classes='client')) == 12
+  assert len(db.objects(protocol='A', groups='eval', purposes='probe', model_ids=[1,2], classes='impostor')) == 24
 
+@db_available
+def test_driver_api():
 
-
-  def test03_driver_api(self):
-
-    from bob.db.base.script.dbmanage import main
-    self.assertEqual(main('atvskeystroke dumplist --self-test'.split()), 0)
-    self.assertEqual(main('atvskeystroke checkfiles --self-test'.split()), 0)
-    self.assertEqual(main('atvskeystroke reverse Genuine_1_1 --self-test'.split()), 0)
-    self.assertEqual(main('atvskeystroke path 3011 --self-test'.split()), 0)
-
+  from bob.db.base.script.dbmanage import main
+  assert main('atvskeystroke dumplist --self-test'.split()) == 0
+  assert main('atvskeystroke checkfiles --self-test'.split()) == 0
+  assert main('atvskeystroke reverse Genuine_1_1 --self-test'.split()) == 0
+  assert main('atvskeystroke path 37 --self-test'.split()) == 0

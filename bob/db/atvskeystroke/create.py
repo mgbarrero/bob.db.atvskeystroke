@@ -21,9 +21,7 @@ import os,string
 from .models import *
 
 # clients
-userid_eval_clients = range(1, 64)
-#userid_eval_impostors = range(1, 64)
-
+userid_clients = range(1, 64)
 
 def nodot(item):
   """Can be used to ignore hidden files, starting with the . character."""
@@ -31,11 +29,11 @@ def nodot(item):
 
 def add_clients(session, verbose):
   """Add clients to the ATVS Keystroke database."""
-  group = 'clientEval'
-  for cid in userid_eval_clients:
-    if verbose>1: print("  Adding user '%d' on '%s' group..." % (cid,group))
-    session.add(Client(cid, group))
-
+  for ctype in ['Genuine', 'Impostor']:
+    for cdid in userid_clients:
+      cid = ctype + '_%d' % cdid
+      if verbose>1: print("  Adding user '%s' of type '%s'..." % (cid, ctype))
+      session.add(Client(cid, ctype, cdid))
 
 
 def add_files(session, imagedir, verbose):
@@ -44,15 +42,16 @@ def add_files(session, imagedir, verbose):
   def add_file(session, basename, userid, shotid, sessionid):
     """Parse a single filename and add it to the list."""
     session.add(File(userid, basename, sessionid, shotid))
-  
+
   filenames = os.listdir(imagedir)
   for filename in filenames:
     basename, extension = os.path.splitext(filename)
-    if extension == '.txt':
+    if extension == db_file_extension:
       if verbose>1: print("  Adding file '%s'..." % (basename))
       parts = string.split(basename, "_")
+      ctype = parts[0]
       shotid = int(parts[2])
-      userid = int(parts[1])
+      userid = ctype + '_%d' % int(parts[1])
       if parts[0] == "Impostor":
         sessionid = 3
       elif parts[0] == "Genuine" and shotid <= 6:
@@ -60,10 +59,7 @@ def add_files(session, imagedir, verbose):
       elif parts[0] == "Genuine" and shotid > 6:
         sessionid = 2
         shotid = shotid - 6
-      
       add_file(session, basename, userid, shotid, sessionid)
-
-
 
 
 def add_protocols(session, verbose):
@@ -84,10 +80,11 @@ def add_protocols(session, verbose):
     session.add(p)
     session.flush()
     session.refresh(p)
-    
+
     # Add protocol purposes
     for key in range(len(protocolPurpose_list)):
       purpose = protocolPurpose_list[key]
+      print p.id, purpose[0], purpose[1]
       pu = ProtocolPurpose(p.id, purpose[0], purpose[1])
       if verbose>1: print("  Adding protocol purpose ('%s','%s')..." % (purpose[0], purpose[1]))
       session.add(pu)
@@ -96,17 +93,17 @@ def add_protocols(session, verbose):
 
       # Add files attached with this protocol purpose
       if(key == 0): #test enrol
-        q = session.query(File).join(Client).filter(Client.sgroup == 'clientEval').filter(File.session_id.in_(enroll_session))
+        q = session.query(File).join(Client).filter(Client.stype == 'Genuine').filter(File.session_id.in_(enroll_session))
         for k in q:
           if verbose>1: print("    Adding protocol file '%s'..." % (k.path))
           pu.files.append(k)
 
       elif(key == 1): #test probe
-        q = session.query(File).join(Client).filter(Client.sgroup == 'clientEval').filter(File.session_id.in_(client_probe_session))
+        q = session.query(File).join(Client).filter(Client.stype == 'Genuine').filter(File.session_id.in_(client_probe_session))
         for k in q:
           if verbose>1: print("    Adding protocol file '%s'..." % (k.path))
           pu.files.append(k)
-        q = session.query(File).join(Client).filter(Client.sgroup == 'clientEval').filter(File.session_id.in_(impostor_probe_session))
+        q = session.query(File).join(Client).filter(Client.stype == 'Impostor').filter(File.session_id.in_(impostor_probe_session))
         for k in q:
           if verbose>1: print("    Adding protocol file '%s'..." % (k.path))
           pu.files.append(k)

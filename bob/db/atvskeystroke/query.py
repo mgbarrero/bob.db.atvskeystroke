@@ -34,32 +34,19 @@ class Database(bob.db.verification.utils.SQLiteDatabase,bob.db.verification.util
   and for the data itself inside the database.
   """
 
-  def __init__(self, original_directory = None, original_extension = '.bmp'):
+  def __init__(self, original_directory = None, original_extension = db_file_extension):
     # call base class constructor
     bob.db.verification.utils.SQLiteDatabase.__init__(self, SQLITE_FILE, File)
     bob.db.verification.utils.Database.__init__(self, original_directory=original_directory, original_extension=original_extension)
 
-  def __group_replace_alias__(self, l):
-    """Replace 'dev' by 'clientDev' and 'eval' by 'clientEval' in a list of groups, and
-       returns the new list"""
+  def __group_replace_eval_by_genuine__(self, l):
+    """Replace 'eval' by 'Genuine' and returns the new list"""
     if not l: return l
-    elif isinstance(l, six.string_types): return self.__group_replace_alias__((l,))
+    elif isinstance(l, six.string_types): return self.__group_replace_eval_by_genuine__((l,))
     l2 = []
     for val in l:
-      if(val == 'eval'): l2.append('clientEval')
-    return tuple(set(l2))
-
-  def __group_replace_alias_clients__(self, l):
-    """Replace 'dev' by 'clientDev' and 'eval' by 'clientEval' in a list of groups, and
-       returns the new list"""
-    if not l: return l
-    elif isinstance(l, six.string_types): return self.__group_replace_alias_clients__((l,))
-    l2 = []
-    for val in l:
-      if(val == 'eval'):
-        if(val == 'eval'): l2.extend(['clientEval','impostorEval'])
-      else:
-        l2.append(val)
+      if (val == 'eval'): l2.append('Genuine')
+      elif (val in Client.type_choices): l2.append(val)
     return tuple(set(l2))
 
   def groups(self, protocol=None):
@@ -67,11 +54,16 @@ class Database(bob.db.verification.utils.SQLiteDatabase,bob.db.verification.util
 
     return ProtocolPurpose.group_choices
 
+  def client_types(self):
+    """Returns the names of the types."""
+
+    return Client.type_choices
+
   def client_groups(self):
-    """Returns the names of the XM2VTS groups. This is specific to this database which
+    """Returns the names of the groups. This is specific to this database which
     does not have separate training, development and evaluation sets."""
 
-    return Client.group_choices
+    return ProtocolPurpose.group_choices
 
   def clients(self, protocol=None, groups=None):
     """Returns a list of :py:class:`.Client` for the specific query by the user.
@@ -82,27 +74,25 @@ class Database(bob.db.verification.utils.SQLiteDatabase,bob.db.verification.util
       Ignored.
 
     groups
-      The groups to which the clients belong either from ('dev', 'eval', 'world')
-      or the specific XM2VTS ones from ('client', 'impostorDev', 'impostorEval')
-      Note that 'dev', 'eval' and 'world' are alias for 'client'.
+      The groups (types) to which the clients belong either from ('Genuine', 'Impostor')
+      Note that 'eval' is an alias for 'Genuine'.
       If no groups are specified, then both clients are impostors are listed.
 
     Returns: A list containing all the clients which have the given properties.
     """
 
-
-    groups = self.__group_replace_alias_clients__(groups)
-    groups = self.check_parameters_for_validity(groups, "group", self.client_groups())
+    groups = self.__group_replace_eval_by_genuine__(groups)
+    groups = self.check_parameters_for_validity(groups, "group", self.client_types())
     # List of the clients
     q = self.query(Client)
     if groups:
-      q = q.filter(Client.sgroup.in_(groups))
+      q = q.filter(Client.stype.in_(groups))
     q = q.order_by(Client.id)
     return list(q)
 
   def models(self, protocol=None, groups=None):
     """Returns a list of :py:class:`.Client` for the specific query by the user.
-       Models correspond to Clients for the XM2VTS database (At most one model per identity).
+       Models correspond to Clients for this database (At most one model per identity).
 
     Keyword Parameters:
 
@@ -110,24 +100,24 @@ class Database(bob.db.verification.utils.SQLiteDatabase,bob.db.verification.util
       Ignored.
 
     groups
-      The groups to which the subjects attached to the models belong ('dev', 'eval', 'world')
-      Note that 'dev', 'eval' and 'world' are alias for 'client'.
-      If no groups are specified, then both clients are impostors are listed.
+      The groups to which the subjects attached to the models belong ('Genuine')
+      Note that 'dev', 'eval' and 'world' are alias for 'Genuine'.
 
     Returns: A list containing all the models (model <-> client in BiosecurID) belonging
              to the given group.
     """
 
+    groups = self.__group_replace_eval_by_genuine__(groups)
+    groups = self.check_parameters_for_validity(groups, "group", ('Genuine',))
+
     # List of the clients
     q = self.query(Client)
     if groups:
-      q = q.filter(Client.sgroup.in_(self.__group_replace_alias__(groups)))
+      q = q.filter(Client.stype.in_(groups))
     else:
-      q = q.filter(Client.sgroup.in_(['clientEval']))
+      q = q.filter(Client.stype.in_(['Genuine']))
     q = q.order_by(Client.id)
     return list(q)
-
-
 
   def model_ids(self, protocol=None, groups=None):
     """Returns a list of model ids for the specific query by the user.
@@ -211,54 +201,33 @@ class Database(bob.db.verification.utils.SQLiteDatabase,bob.db.verification.util
     if ('eval' in groups):
       if('enrol' in purposes):
         q = self.query(File).join(Client).join((ProtocolPurpose, File.protocolPurposes)).join(Protocol).\
-              filter(Client.sgroup.in_(['clientEval'])).\
+              filter(Client.stype.in_(['Genuine'])).\
               filter(and_(Protocol.name.in_(protocol), ProtocolPurpose.sgroup.in_(groups), ProtocolPurpose.purpose == 'enrol'))
         if model_ids:
-          q = q.filter(Client.id.in_(model_ids))
+          q = q.filter(Client.subid.in_(model_ids))
         q = q.order_by(File.client_id, File.session_id, File.shot_id)
         retval += list(q)
 
       if('probe' in purposes):
         if('client' in classes):
-          ltmp=[]
-          if( 'eval' in groups):
-            ltmp.append('clientEval')
-          clientGroups = tuple(ltmp)
           q = self.query(File).join(Client).join((ProtocolPurpose, File.protocolPurposes)).join(Protocol).\
-                filter(Client.sgroup.in_(clientGroups)).\
+                filter(Client.stype.in_(['Genuine'])).\
                 filter(and_(Protocol.name.in_(protocol), ProtocolPurpose.sgroup.in_(groups), ProtocolPurpose.purpose == 'probe'))
-          print model_ids
           if model_ids:
-            q = q.filter(Client.id.in_(model_ids))
+            q = q.filter(Client.subid.in_(model_ids))
           q = q.order_by(File.client_id, File.session_id, File.shot_id)
           retval += list(q)
 
         if('impostor' in classes):
-          ltmp = []
-          if( 'eval' in groups):
-            ltmp.append('clientEval')
-          impostorGroups = tuple(ltmp)
           q = self.query(File).join(Client).join((ProtocolPurpose, File.protocolPurposes)).join(Protocol).\
-                filter(Client.sgroup.in_(ltmp)).\
+                filter(Client.stype.in_(['Impostor'])).\
                 filter(and_(Protocol.name.in_(protocol), ProtocolPurpose.sgroup.in_(groups), ProtocolPurpose.purpose == 'probe'))
-          print model_ids
           if model_ids:
-            q = q.filter(Client.id.in_(model_ids))
-          q = q.order_by(File.client_id, File.session_id, File.shot_id)
-          retval += list(q)
-
-          # Needs to add 'client-impostor' samples  CHEQUEAR ESTO!!
-          q = self.query(File).join(Client).join((ProtocolPurpose, File.protocolPurposes)).join(Protocol).\
-                filter(Client.sgroup == 'client').\
-                filter(and_(Protocol.name.in_(protocol), ProtocolPurpose.sgroup.in_(groups), ProtocolPurpose.purpose == 'probe'))
-          if(len(model_ids) == 1):
-            q = q.filter(not_(Client.id.in_(model_ids)))
+            q = q.filter(Client.subid.in_(model_ids))
           q = q.order_by(File.client_id, File.session_id, File.shot_id)
           retval += list(q)
 
     return list(set(retval)) # To remove duplicates
-
-
 
   def protocol_names(self):
     """Returns all registered protocol names"""
@@ -292,4 +261,3 @@ class Database(bob.db.verification.utils.SQLiteDatabase,bob.db.verification.util
     """Returns the list of allowed purposes"""
 
     return ProtocolPurpose.purpose_choices
-
