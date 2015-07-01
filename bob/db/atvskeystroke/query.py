@@ -137,7 +137,7 @@ class Database(bob.db.verification.utils.SQLiteDatabase,bob.db.verification.util
              to the given group.
     """
 
-    return [client.id for client in self.models(protocol, groups)]
+    return [client.subid for client in self.models(protocol, groups)]
 
   def has_client_id(self, id):
     """Returns True if we have a client with a certain integer identifier"""
